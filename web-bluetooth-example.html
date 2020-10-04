@@ -158,14 +158,14 @@ index: index.html
     function encodePower(powerA, powerB) {
         /**
          * notify/write: 3 bytes: zero(2) ~ uint(11).as("powerLevelB") ~uint(11).as("powerLevelA")
-         * 0 0 b b b b b b | b b b b b a a a | a a a a a a a a
+         * 0 0 a a a a a a | a a a a a b b b | b b b b b b b b
          * Power levels must likely be a multiple of "powerStep" and between 0 and "maxPower" (as obtained through config attribute.)
          */
         const buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, (powerB >>> 5) & 0b00111111)
-        view.setUint8(1, ((powerB & 0b00011111) << 3) | ((powerA & 0b11111111111) >>> 8))
-        view.setUint8(2, powerA & 0b11111111)
+        view.setUint8(0, (powerA >>> 5) & 0b00111111)
+        view.setUint8(1, ((powerA & 0b00011111) << 3) | ((powerB & 0b11111111111) >>> 8))
+        view.setUint8(2, powerB & 0b11111111)
 
         flipFirstAndThirdByte(buffer);
         return buffer;
@@ -178,8 +178,8 @@ index: index.html
     function parsePower(dataView) {
         flipFirstAndThirdByte(dataView.buffer);
         // notify/write: 3 bytes: flipFirstAndThirdByte(zero(2) ~ uint(11).as("powerLevelB") ~uint(11).as("powerLevelA")
-        const powerB = dataView.getUint16(0) >> 3 // push the remainder of B out of the first 2 bytes
-        const powerA = dataView.getUint16(1) & 0b0000011111111111  // push the remainder A out of the last 2 bytes
+        const powerA = dataView.getUint16(0) >> 3 // push the remainder of B out of the first 2 bytes
+        const powerB = dataView.getUint16(1) & 0b0000011111111111  // push the remainder A out of the last 2 bytes
         return [powerA, powerB]
     }
 
