@@ -144,7 +144,7 @@ index: index.html
      * @return {void}
      */
     function flipFirstAndThirdByte(buffer) {
-        const bufferBytes = Uint8Array.from(buffer);
+        const bufferBytes = new Uint8Array(buffer);
         const b = bufferBytes[0];
         bufferBytes[0] = bufferBytes[2];
         bufferBytes[2] = b;
@@ -157,14 +157,15 @@ index: index.html
      */
     function encodePower(powerA, powerB) {
         /**
-         * notify/write: 3 bytes: zero(2) ~ uint(11).as("powerLevelA") ~uint(11).as("powerLevelB")
-         * 0 0 a a a a a a | a a a a a b b b | b b b b b b b b
+         * notify/write: 3 bytes: zero(2) ~ uint(11).as("powerLevelB") ~uint(11).as("powerLevelA")
+         * 0 0 b b b b b b | b b b b b a a a | a a a a a a a a
          * Power levels must likely be a multiple of "powerStep" and between 0 and "maxPower" (as obtained through config attribute.)
          */
         const buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint16(1, powerB & 0x0000011111111111, false);
-        view.setUint16(0, (powerA << 3) & 0b0011111111111000 | ((powerB >>> 8) & 0b000000000000111), false);
+        view.setUint8(0, (powerB >>> 5) & 0b00111111)
+        view.setUint8(1, ((powerB & 0b00011111) << 3) | ((powerA & 0b11111111111) >>> 8))
+        view.setUint8(2, powerA & 0b11111111)
 
         flipFirstAndThirdByte(buffer);
         return buffer;
@@ -176,9 +177,9 @@ index: index.html
      */
     function parsePower(dataView) {
         flipFirstAndThirdByte(dataView.buffer);
-        // notify/write: 3 bytes: flipFirstAndThirdByte(zero(2) ~ uint(11).as("powerLevelA") ~uint(11).as("powerLevelB")
-        const powerA = dataView.getUint16(0) >> 3 // push the remainder of B out of the first 2 bytes
-        const powerB = dataView.getUint16(1) & 0xb0000011111111111  // push the remainder A out of the last 2 bytes
+        // notify/write: 3 bytes: flipFirstAndThirdByte(zero(2) ~ uint(11).as("powerLevelB") ~uint(11).as("powerLevelA")
+        const powerB = dataView.getUint16(0) >> 3 // push the remainder of B out of the first 2 bytes
+        const powerA = dataView.getUint16(1) & 0b0000011111111111  // push the remainder A out of the last 2 bytes
         return [powerA, powerB]
     }
 
@@ -239,12 +240,14 @@ index: index.html
             const maxPower = configValue.getUint16(0);
             const powerStep = configValue.getUint8(2);
 
+            const powerLevelAInput = document.getElementById('power_level_a');
+            const powerLevelBInput = document.getElementById('power_level_b');
             document.getElementById('max_power').value = maxPower;
             document.getElementById('power_step').value = powerStep;
-            document.getElementById('power_level_a').max = maxPower;
-            document.getElementById('power_level_a').step = powerStep;
-            document.getElementById('power_level_b').max = maxPower;
-            document.getElementById('power_level_b').step = powerStep;
+            powerLevelAInput.max = maxPower;
+            powerLevelAInput.step = powerStep;
+            powerLevelBInput.max = maxPower;
+            powerLevelBInput.step = powerStep;
             document.getElementById('power_level_a_progress').max = maxPower;
             document.getElementById('power_level_b_progress').max = maxPower;
 
@@ -255,26 +258,22 @@ index: index.html
 
             log('Read Power value...');
             const powerValue = await power.readValue();
-            let [publishedPowerA, publishedPowerB] = parsePower(powerValue);
-            const powerLevelAInput = document.querySelector('#power_level_a');
-            const powerLevelBInput = document.querySelector('#power_level_b');
+            let [devicePowerA, devicePowerB] = parsePower(powerValue);
             const powerLevelAProgress = document.querySelector('#power_level_a_progress');
             const powerLevelBProgress = document.querySelector('#power_level_b_progress');
-            powerLevelAInput.value = publishedPowerA;
-            powerLevelBInput.value = publishedPowerB;
-            powerLevelAProgress.value = publishedPowerA;
-            powerLevelBProgress.value = publishedPowerB;
-            log(`> Power Level is at a:${publishedPowerA} b:${publishedPowerB}`);
+            powerLevelAInput.value = devicePowerA;
+            powerLevelBInput.value = devicePowerB;
+            powerLevelAProgress.value = devicePowerA;
+            powerLevelBProgress.value = devicePowerB;
+            log(`> Power Level is at a:${devicePowerA} b:${devicePowerB}`);
 
             log('Subscribing to Power value...');
             power.addEventListener('characteristicvaluechanged',
                 (event) => {
-                    const [powerA, powerB] = parsePower(event.target.value);
-                    powerLevelAProgress.value = powerA;
-                    powerLevelBProgress.value = powerB;
-                    publishedPowerA = powerA;
-                    publishedPowerB = powerB;
-                    log(`> Power Level is at a:${powerA} b:${powerB}`);
+                    [devicePowerA, devicePowerB] = parsePower(event.target.value);
+                    powerLevelAProgress.value = devicePowerA;
+                    powerLevelBProgress.value = devicePowerB;
+                    log(`> Power Level is at a:${devicePowerA} b:${devicePowerB}`);
                 });
             await power.startNotifications();
 
@@ -356,7 +355,7 @@ index: index.html
 
                     const selectedPowerA = parseInt(powerLevelAInput.value);
                     const selectedPowerB = parseInt(powerLevelBInput.value);
-                    if (selectedPowerA != publishedPowerA || selectedPowerB != publishedPowerB) {
+                    if (selectedPowerA !== devicePowerA || selectedPowerB !== devicePowerB) {
                         power.writeValue(encodePower(selectedPowerA, selectedPowerB));
                         log(`> Writing Power with with: a:${selectedPowerA} ${selectedPowerB}`);
                     }
