@@ -52,7 +52,7 @@ index: index.html
         <label for="ax">ax (0-31)</label>
         <input id="ax" type="number" min="0" max="31" value="" placeholder="?"/>
         <label for="ay">ay (0-1023)</label>
-        <input id="ay" type="number" min="0" max="1024" value="" placeholder="?"/>
+        <input id="ay" type="number" min="0" max="1024" step="10" value="" placeholder="?"/>
         <label for="az">az (0-31)</label>
         <input id="az" type="number" min="0" max="31" value="" placeholder="?"/>
     </fieldset>
@@ -61,7 +61,7 @@ index: index.html
         <label for="bx">ax (0-31)</label>
         <input id="bx" type="number" min="0" max="31" value="" placeholder="?"/>
         <label for="by">ay (0-1023)</label>
-        <input id="by" type="number" min="0" max="1024" value="" placeholder="?"/>
+        <input id="by" type="number" min="0" max="1024" step="10" value="" placeholder="?"/>
         <label for="bz">az (0-31)</label>
         <input id="bz" type="number" min="0" max="31" value="" placeholder="?"/>
     </fieldset>
@@ -124,8 +124,8 @@ index: index.html
 
     const configCharacteristic = "955a1507-0fe2-f5aa-a094-84b8d4f3e8ad";
     const powerCharacteristic = "955a1504-0fe2-f5aa-a094-84b8d4f3e8ad";
-    const patternACharacteristic = "955a1505-0fe2-f5aa-a094-84b8d4f3e8ad";
-    const patternBCharacteristic = "955a1506-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const patternACharacteristic = "955a1506-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const patternBCharacteristic = "955a1505-0fe2-f5aa-a094-84b8d4f3e8ad";
 
     const batteryService = "955a180a-0fe2-f5aa-a094-84b8d4f3e8ad";
     const batteryCharacteristic = "955a1500-0fe2-f5aa-a094-84b8d4f3e8ad";
