@@ -1,0 +1,15 @@
+encoding: utf-8
+exclude: [vendor]
+gems:
+defaults:
+  -
+    scope:
+      path: ""
+    values:
+      layout: "default"
+exclude:
+  - package.json
+  - README.md
+  - node_modules
+  - Gemfile
+  - vendor

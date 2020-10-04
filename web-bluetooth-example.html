@@ -1,0 +1,401 @@
+---
+feature_name: Web Bluetooth / Battery Level (Async Await)
+chrome_version: 55
+check_min_version: true
+feature_id: 5264933985976320
+icon_url: icon.png
+index: index.html
+---
+
+
+<img class="pageIcon" src="icon.png">
+<h1>Web Bluetooth / Coyote Sample</h1>
+<p class="availability">
+    Available in <a target="_blank" href="https://www.chromestatus.com/feature/5264933985976320">Chrome 55+</a> |
+    <a target="_blank" href="https://github.com/rezreal/pavlow3/web-bluetooth-example.html">View on GitHub</a>
+</p>
+<p>The <a href="https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web">Web Bluetooth
+    API</a> lets websites discover and communicate with devices over the
+    Bluetooth 4 wireless standard using the Generic Attribute Profile (GATT). It is
+    currently partially implemented in Android M, Chrome OS, Linux, and Mac.</p>
+
+
+<p>This sample illustrates the use of the Web Bluetooth API to interact with the Coyote device alert service.</p>
+
+<button id="pair">Pair with Coyote</button>
+
+<form>
+    <fieldset>
+        <legend>Status</legend>
+        <label for="battery_level">Battery Level</label>
+        <progress id="battery_level" value="0" max="100"></progress>
+        <input id="battery_level_text" disabled/>
+        <label for="max_power">Max Power</label>
+        <input id="max_power" disabled value="?"/>
+        <label for="power_step">Power Step</label>
+        <input id="power_step" disabled value="?"/>
+        <br/>
+        <label for="power_level_a">Power Level A</label>
+        <input id="power_level_a" min="0" value="0" max="2000" step="7" type="number"/>
+        <progress id="power_level_a_progress" value="0" max="2000"></progress>
+        <br/>
+        <label for="power_level_b">Power Level B</label>
+        <input id="power_level_b" min="0" value="0" max="2000" step="7" type="number"/>
+        <progress id="power_level_b_progress" value="0" max="2000"></progress>
+        <br/>
+        <button type="button" id="setPower" disabled="disabled">Set Power</button>
+        <button type="button" id="start" disabled="disabled">Start</button>
+        <button type="button" id="stop" disabled="disabled">Stop</button>
+    </fieldset>
+    <fieldset>
+        <legend>Pattern A</legend>
+        <label for="ax">ax (0-31)</label>
+        <input id="ax" type="number" min="0" max="31" value="" placeholder="?"/>
+        <label for="ay">ay (0-1023)</label>
+        <input id="ay" type="number" min="0" max="1024" value="" placeholder="?"/>
+        <label for="az">az (0-31)</label>
+        <input id="az" type="number" min="0" max="31" value="" placeholder="?"/>
+    </fieldset>
+    <fieldset>
+        <legend>Pattern B</legend>
+        <label for="bx">ax (0-31)</label>
+        <input id="bx" type="number" min="0" max="31" value="" placeholder="?"/>
+        <label for="by">ay (0-1023)</label>
+        <input id="by" type="number" min="0" max="1024" value="" placeholder="?"/>
+        <label for="bz">az (0-31)</label>
+        <input id="bz" type="number" min="0" max="31" value="" placeholder="?"/>
+    </fieldset>
+
+</form>
+
+<script>
+    var ChromeSamples = {
+        log: function () {
+
+            var line = Array.prototype.slice.call(arguments).map(function (argument) {
+                return typeof argument === 'string' ? argument : JSON.stringify(argument);
+            }).join(' ');
+
+            document.querySelector('#log').textContent += line + '\n';
+            const elem = document.getElementById('log');
+            elem.scrollTop = elem.scrollHeight;
+        },
+
+        clearLog: function () {
+            document.querySelector('#log').textContent = '';
+        },
+
+        setStatus: function (status) {
+            document.querySelector('#status').textContent = status;
+        },
+
+        setContent: function (newContent) {
+            var content = document.querySelector('#content');
+            while (content.hasChildNodes()) {
+                content.removeChild(content.lastChild);
+            }
+            content.appendChild(newContent);
+        }
+
+    };
+</script>
+
+<h3>Live Output</h3>
+<div id="output" class="output">
+    <div id="content"></div>
+    <div id="status"></div>
+    <pre id="log"></pre>
+</div>
+
+
+<script>
+    if (/Chrome\/(\d+\.\d+.\d+.\d+)/.test(navigator.userAgent)) {
+        // Let's log a warning if the sample is not supposed to execute on this
+        // version of Chrome.
+        if (55 > parseInt(RegExp.$1)) {
+            ChromeSamples.setStatus('Warning! Keep in mind this sample has been tested with Chrome ' + 55 + '.');
+        }
+    }
+</script>
+
+
+<script>
+    const coyoteService = "955a180b-0fe2-f5aa-a094-84b8d4f3e8ad";
+
+    const configCharacteristic = "955a1507-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const powerCharacteristic = "955a1504-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const patternACharacteristic = "955a1505-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const patternBCharacteristic = "955a1506-0fe2-f5aa-a094-84b8d4f3e8ad";
+
+    const batteryService = "955a180a-0fe2-f5aa-a094-84b8d4f3e8ad";
+    const batteryCharacteristic = "955a1500-0fe2-f5aa-a094-84b8d4f3e8ad";
+
+    let hasAcceptedWarning = false;
+
+    document.querySelector('button#pair').addEventListener('click', () => {
+        if (isWebBluetoothEnabled()) {
+            ChromeSamples.clearLog();
+            onButtonClick();
+        }
+    });
+
+    /***
+     * @param {ArrayBuffer} buffer
+     * @return {void}
+     */
+    function flipFirstAndThirdByte(buffer) {
+        const bufferBytes = Uint8Array.from(buffer);
+        const b = bufferBytes[0];
+        bufferBytes[0] = bufferBytes[2];
+        bufferBytes[2] = b;
+    }
+
+    /**
+     * @param {number} powerA
+     * @param {number} powerB
+     * @return {ArrayBuffer}
+     */
+    function encodePower(powerA, powerB) {
+        /**
+         * notify/write: 3 bytes: zero(2) ~ uint(11).as("powerLevelA") ~uint(11).as("powerLevelB")
+         * 0 0 a a a a a a | a a a a a b b b | b b b b b b b b
+         * Power levels must likely be a multiple of "powerStep" and between 0 and "maxPower" (as obtained through config attribute.)
+         */
+        const buffer = new ArrayBuffer(3);
+        const view = new DataView(buffer);
+        view.setUint16(1, powerB & 0x0000011111111111, false);
+        view.setUint16(0, (powerA << 3) & 0b0011111111111000 | ((powerB >>> 8) & 0b000000000000111), false);
+
+        flipFirstAndThirdByte(buffer);
+        return buffer;
+    }
+
+    /**
+     * @param {DataView} dataView
+     * @return {[number, number]} powerA and powerB
+     */
+    function parsePower(dataView) {
+        flipFirstAndThirdByte(dataView.buffer);
+        // notify/write: 3 bytes: flipFirstAndThirdByte(zero(2) ~ uint(11).as("powerLevelA") ~uint(11).as("powerLevelB")
+        const powerA = dataView.getUint16(0) >> 3 // push the remainder of B out of the first 2 bytes
+        const powerB = dataView.getUint16(1) & 0xb0000011111111111  // push the remainder A out of the last 2 bytes
+        return [powerA, powerB]
+    }
+
+    /**
+     * @param {DataView} dataView
+     * @return {[number, number, number]} ax ay az
+     */
+    function parsePattern(dataView) {
+        flipFirstAndThirdByte(dataView.buffer);
+        // flipFirstAndThirdByte(zero(4) ~ uint(5).as("az") ~ uint(10).as("ay") ~ uint(5).as("ax"))
+        // 0000zzzz | zyyyyyyy | yyyxxxxx
+        const az = (dataView.getUint16(0) & 0b00001111_10000000) >>> 7;
+        const ay = ((dataView.getUint16(0) & 0b00000000_01111111)) << 3 | ((dataView.getUint8(2) & 0b11100000) >>> 5);
+        const ax = (dataView.getUint8(2) & 0b00011111)
+        return [ax, ay, az]
+    }
+
+    /**
+     * @param {number} ax
+     * @param {number} ay
+     * @param {number} az
+     * @return {ArrayBuffer}
+     */
+    function encodePattern(ax, ay, az) {
+        const buffer = new ArrayBuffer(3);
+        // flipFirstAndThirdByte(zero(4) ~ uint(5).as("az") ~ uint(10).as("ay") ~ uint(5).as("ax"))
+        // 0000zzzz | zyyyyyyy | yyyxxxxx
+        const view = new DataView(buffer);
+        view.setUint8(0, ((az & 0b00011110) >>> 1))
+        view.setUint16(1, ((az & 0b00000001) << 15) | ((ay & 0b00000011_11111111) << 5) | (ax & 0b00011111));
+
+        flipFirstAndThirdByte(buffer);
+        return buffer;
+    }
+
+    async function onButtonClick() {
+        try {
+            log('Requesting Bluetooth Device...');
+            const device = await navigator.bluetooth.requestDevice({
+                //filters: [{services: [coyoteService, batteryService]}],
+                acceptAllDevices: true,
+                optionalServices: [coyoteService, batteryService]
+            });
+
+            log('Connecting to GATT Server...');
+            const server = await device.gatt.connect();
+
+            log('Getting Coyote Service...');
+            const service = await server.getPrimaryService(coyoteService);
+
+            log('Getting Config Characteristic...');
+            const config = await service.getCharacteristic(configCharacteristic);
+
+            log('Reading Config Characteristic...');
+            // read: 3 bytes: flipFirstAndThirdByte(skip(5) ~ uint(11).as("maxPower") ~ uint8.as("powerStep"))
+            const configValue = await config.readValue();
+            flipFirstAndThirdByte(configValue.buffer);
+            const maxPower = configValue.getUint16(0);
+            const powerStep = configValue.getUint8(2);
+
+            document.getElementById('max_power').value = maxPower;
+            document.getElementById('power_step').value = powerStep;
+            document.getElementById('power_level_a').max = maxPower;
+            document.getElementById('power_level_a').step = powerStep;
+            document.getElementById('power_level_b').max = maxPower;
+            document.getElementById('power_level_b').step = powerStep;
+            document.getElementById('power_level_a_progress').max = maxPower;
+            document.getElementById('power_level_b_progress').max = maxPower;
+
+            log('Getting Power Characteristic...');
+
+            const power = await service.getCharacteristic(powerCharacteristic);
+
+
+            log('Read Power value...');
+            const powerValue = await power.readValue();
+            let [publishedPowerA, publishedPowerB] = parsePower(powerValue);
+            const powerLevelAInput = document.querySelector('#power_level_a');
+            const powerLevelBInput = document.querySelector('#power_level_b');
+            const powerLevelAProgress = document.querySelector('#power_level_a_progress');
+            const powerLevelBProgress = document.querySelector('#power_level_b_progress');
+            powerLevelAInput.value = publishedPowerA;
+            powerLevelBInput.value = publishedPowerB;
+            powerLevelAProgress.value = publishedPowerA;
+            powerLevelBProgress.value = publishedPowerB;
+            log(`> Power Level is at a:${publishedPowerA} b:${publishedPowerB}`);
+
+            log('Subscribing to Power value...');
+            power.addEventListener('characteristicvaluechanged',
+                (event) => {
+                    const [powerA, powerB] = parsePower(event.target.value);
+                    powerLevelAProgress.value = powerA;
+                    powerLevelBProgress.value = powerB;
+                    publishedPowerA = powerA;
+                    publishedPowerB = powerB;
+                    log(`> Power Level is at a:${powerA} b:${powerB}`);
+                });
+            await power.startNotifications();
+
+
+
+
+
+            log('Getting Pattern Characteristics...');
+
+
+            const patternA = await service.getCharacteristic(patternACharacteristic);
+            const patternB = await service.getCharacteristic(patternBCharacteristic);
+
+
+            log('Reading Pattern Characteristics...');
+
+            const patternAValue = await patternA.readValue();
+
+            const [ax, ay, az] = parsePattern(patternAValue);
+            document.querySelector('#ax').value = ax;
+            document.querySelector('#ay').value = ay;
+            document.querySelector('#az').value = az;
+            log(`> Pattern A is at ax:${ax} ${ay} az:${az}`);
+
+            const patternBValue = await patternB.readValue();
+
+            const [bx, by, bz] = parsePattern(patternAValue);
+            document.querySelector('#bx').value = bx;
+            document.querySelector('#by').value = by;
+            document.querySelector('#bz').value = bz;
+            log(`> Pattern B is at ax:${bx} ${by} az:${bz}`);
+
+
+            log('Getting Battery Service...');
+            const battery = await server.getPrimaryService(batteryService);
+
+            {
+                log('Getting Battery Level Characteristic...');
+                const batteryLevelCharacteristic = await battery.getCharacteristic(batteryCharacteristic);
+
+                log('Starting Battery Level Notifications...');
+                await batteryLevelCharacteristic.startNotifications();
+
+
+                log('Reading Battery Level...');
+                const value = await batteryLevelCharacteristic.readValue();
+                document.querySelector('progress#battery_level').value = value.getUint8(0);
+                document.querySelector('input#battery_level_text').value = value.getUint8(0) + "%";
+                log('> Battery Level is ' + value.getUint8(0) + '%');
+
+                batteryLevelCharacteristic.addEventListener('characteristicvaluechanged',
+                    (event) => {
+                        let batteryLevel = event.target.value.getUint8(0);
+                        log('> Battery Level is ' + batteryLevel + '%');
+                        document.querySelector('progress#battery_level').value = Math.round(batteryLevel);
+                        document.querySelector('input#battery_level_text').value = batteryLevel + "%";
+                    });
+
+            }
+
+            const startButton = document.querySelector("button#start");
+            const stopButton = document.querySelector("button#stop");
+            startButton.disabled = false;
+            startButton.addEventListener('click', () => {
+                if (hasAcceptedWarning || window.confirm("This can hurt! Are you sure you want to continue (on your responsibility)?")) {
+                    hasAcceptedWarning = true;
+                }
+                startButton.disabled = true;
+
+                const timer = window.setInterval(()=> {
+                    const ax = parseInt(document.querySelector('#ax').value);
+                    const ay = parseInt(document.querySelector('#ay').value);
+                    const az = parseInt(document.querySelector('#az').value);
+                    patternA.writeValue(encodePattern(ax, ay, az));
+                    const bx = parseInt(document.querySelector('#bx').value);
+                    const by = parseInt(document.querySelector('#by').value);
+                    const bz = parseInt(document.querySelector('#bz').value);
+                    patternB.writeValue(encodePattern(bx, by, bz));
+
+                    const selectedPowerA = parseInt(powerLevelAInput.value);
+                    const selectedPowerB = parseInt(powerLevelBInput.value);
+                    if (selectedPowerA != publishedPowerA || selectedPowerB != publishedPowerB) {
+                        power.writeValue(encodePower(selectedPowerA, selectedPowerB));
+                        log(`> Writing Power with with: a:${selectedPowerA} ${selectedPowerB}`);
+                    }
+
+                }, 100);
+
+                const stopClickListener = stopButton.addEventListener('click', () => {
+                    stopButton.removeEventListener('click', stopClickListener);
+                    clearInterval(timer);
+                    power.writeValue(encodePower(0,0));
+                    powerLevelAInput.value = 0;
+                    powerLevelBInput.value = 0;
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                });
+                stopButton.disabled = false;
+
+            });
+
+        } catch (error) {
+            log('Argh! ' + error);
+            throw error;
+        }
+    }
+</script>
+
+
+<script>
+    log = ChromeSamples.log;
+
+
+    function isWebBluetoothEnabled() {
+        if (navigator.bluetooth) {
+            return true;
+        } else {
+            ChromeSamples.setStatus('Web Bluetooth API is not available.\n' +
+                'Please make sure the "Experimental Web Platform features" flag is enabled.');
+            return false;
+        }
+    }
+</script>
+
