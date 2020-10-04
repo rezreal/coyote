@@ -22,6 +22,8 @@ index: index.html
 
 <p>This sample illustrates the use of the Web Bluetooth API to interact with the Coyote device alert service.</p>
 
+<p><em>Note: During operation, the tab must stay in the foreground in order to keep sending the power levels. Otherwise the device will stutter (background tabs can only "tick" once a second). This problem can be addressed using web-workers.</em></p>
+
 <button id="pair">Pair with Coyote</button>
 
 <form>
@@ -219,8 +221,10 @@ index: index.html
         try {
             log('Requesting Bluetooth Device...');
             const device = await navigator.bluetooth.requestDevice({
-                //filters: [{services: [coyoteService, batteryService]}],
-                acceptAllDevices: true,
+                filters: [{
+                    namePrefix: 'D-LAB',
+                }],
+                //acceptAllDevices: true,
                 optionalServices: [coyoteService, batteryService]
             });
 
