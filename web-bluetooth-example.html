@@ -303,11 +303,11 @@ index: index.html
 
             const patternBValue = await patternB.readValue();
 
-            const [bx, by, bz] = parsePattern(patternAValue);
+            const [bx, by, bz] = parsePattern(patternBValue);
             document.querySelector('#bx').value = bx;
             document.querySelector('#by').value = by;
             document.querySelector('#bz').value = bz;
-            log(`> Pattern B is at ax:${bx} ${by} az:${bz}`);
+            log(`> Pattern B is at bx:${bx} ${by} bz:${bz}`);
 
 
             log('Getting Battery Service...');
